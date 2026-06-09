@@ -9,6 +9,7 @@ import { CategoryDetailPage } from './pages/CategoryDetailPage'
 import { SearchPage } from './pages/SearchPage'
 import { AccountPage } from './pages/AccountPage'
 import { MegaPage } from './pages/MegaPage'
+import { AdminPage } from './pages/AdminPage'
 
 function App() {
   return (
@@ -25,6 +26,8 @@ function App() {
         <Route path="/search" element={<Layout><SearchPage /></Layout>} />
         <Route path="/account" element={<Layout><AccountPage /></Layout>} />
         <Route path="/mega" element={<Layout><MegaPage /></Layout>} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/*" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

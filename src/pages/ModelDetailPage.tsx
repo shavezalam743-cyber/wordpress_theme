@@ -1,18 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Globe, TrendingUp, Star, Heart } from 'lucide-react'
+import { ArrowLeft, Globe, TrendingUp, Star, Heart, User } from 'lucide-react'
 import { supabase, type Model, type Post } from '@/lib/supabase'
 import { ContentCard } from '@/components/ContentCard'
 import { Header } from '@/components/Header'
+import { useSEO } from '@/hooks/useSEO'
 
 function StatBadge({ label, value }: { label: string; value: string | number }) {
   return (
-    <div
-      className="px-4 py-3 rounded-xl text-center"
-      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-    >
-      <p className="text-lg font-bold text-white">{value}</p>
+    <div className="px-4 py-3 rounded-xl text-center" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+      <p className="text-base font-bold text-white">{value}</p>
       <p className="text-xs text-white/40 mt-0.5">{label}</p>
     </div>
   )
@@ -25,18 +23,18 @@ export function ModelDetailPage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
+  const displayName = model ? (model.stage_name || model.name) : ''
+
+  useSEO({
+    title: displayName || undefined,
+    description: model?.bio ?? `Browse ${displayName}'s exclusive content collections.`,
+    image: model?.cover_image ?? undefined,
+    type: 'profile',
+  })
+
   useEffect(() => {
     if (!slug) return
-    Promise.all([
-      supabase.from('models').select('*').eq('slug', slug).single(),
-      supabase
-        .from('post_models')
-        .select('post_id')
-        .then(async ({ data: pm }) => {
-          // fallback: get posts that match this model by querying all and filtering
-          return { data: pm }
-        }),
-    ]).then(async ([{ data: modelData, error }]) => {
+    supabase.from('models').select('*').eq('slug', slug).single().then(async ({ data: modelData, error }) => {
       if (error || !modelData) {
         setNotFound(true)
         setLoading(false)
@@ -44,27 +42,17 @@ export function ModelDetailPage() {
       }
       setModel(modelData as Model)
 
-      // Get posts linked to this model through post_models
-      const { data: pmData } = await supabase
-        .from('post_models')
-        .select('post_id')
-        .eq('model_id', modelData.id)
+      // Track view
+      supabase.from('analytics').insert({ event_type: 'view', entity_type: 'model', entity_id: modelData.id, entity_slug: modelData.slug }).then(() => {})
+
+      const { data: pmData } = await supabase.from('post_models').select('post_id').eq('model_id', modelData.id)
 
       if (pmData && pmData.length > 0) {
         const postIds = pmData.map((pm: { post_id: string }) => pm.post_id)
-        const { data: postsData } = await supabase
-          .from('posts')
-          .select('*')
-          .in('id', postIds)
-          .order('published_at', { ascending: false })
+        const { data: postsData } = await supabase.from('posts').select('*').in('id', postIds).order('published_at', { ascending: false })
         setPosts((postsData as Post[]) ?? [])
       } else {
-        // Show a few sample posts if no linked posts
-        const { data: samplePosts } = await supabase
-          .from('posts')
-          .select('*')
-          .order('published_at', { ascending: false })
-          .limit(4)
+        const { data: samplePosts } = await supabase.from('posts').select('*').order('view_count', { ascending: false }).limit(8)
         setPosts((samplePosts as Post[]) ?? [])
       }
 
@@ -100,7 +88,7 @@ export function ModelDetailPage() {
     )
   }
 
-  const displayName = model.stage_name || model.name
+  const profileImg = model.profile_image || model.cover_image
 
   return (
     <>
@@ -108,32 +96,18 @@ export function ModelDetailPage() {
       <div className="pb-12">
         {/* Hero section */}
         <div className="relative">
-          {/* Cover */}
-          <div className="relative overflow-hidden" style={{ height: '320px' }}>
+          <div className="relative overflow-hidden" style={{ height: '360px' }}>
             {model.cover_image ? (
-              <img
-                src={model.cover_image}
-                alt={displayName}
-                className="w-full h-full object-cover"
-              />
+              <img src={model.cover_image} alt={displayName} className="w-full h-full object-cover" />
             ) : (
-              <div
-                className="w-full h-full"
-                style={{ background: 'linear-gradient(135deg, rgba(255,90,60,0.2), rgba(180,30,30,0.1))' }}
-              />
+              <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, rgba(255,90,60,0.2), rgba(180,30,30,0.1))' }} />
             )}
-            <div
-              className="absolute inset-0"
-              style={{ background: 'linear-gradient(180deg, rgba(8,8,8,0) 30%, rgba(8,8,8,0.98) 100%)' }}
-            />
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(8,8,8,0) 20%, rgba(8,8,8,0.99) 100%)' }} />
           </div>
 
           {/* Profile info */}
-          <div className="px-4 md:px-5 -mt-20 relative z-10">
-            <Link
-              to="/models"
-              className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors mb-4"
-            >
+          <div className="px-4 md:px-5 -mt-28 relative z-10">
+            <Link to="/models" className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors mb-4">
               <ArrowLeft className="w-4 h-4" />
               All Models
             </Link>
@@ -141,17 +115,14 @@ export function ModelDetailPage() {
             <div className="flex items-end gap-5 mb-6">
               {/* Profile image */}
               <div
-                className="w-20 h-20 md:w-28 md:h-28 rounded-2xl overflow-hidden flex-shrink-0"
-                style={{ border: '3px solid rgba(255,90,60,0.5)', boxShadow: '0 8px 32px rgba(255,90,60,0.25)' }}
+                className="w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden flex-shrink-0"
+                style={{ border: '3px solid rgba(255,90,60,0.5)', boxShadow: '0 8px 32px rgba(255,90,60,0.3)' }}
               >
-                {model.cover_image ? (
-                  <img src={model.cover_image} alt={displayName} className="w-full h-full object-cover" />
+                {profileImg ? (
+                  <img src={profileImg} alt={displayName} className="w-full h-full object-cover" />
                 ) : (
-                  <div
-                    className="w-full h-full flex items-center justify-center"
-                    style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)' }}
-                  >
-                    <span className="text-3xl font-bold text-white">{displayName[0]}</span>
+                  <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)' }}>
+                    <User className="w-10 h-10 text-white" />
                   </div>
                 )}
               </div>
@@ -160,23 +131,17 @@ export function ModelDetailPage() {
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">{displayName}</h1>
                   {model.is_trending && (
-                    <span
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold text-white"
-                      style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)' }}
-                    >
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold text-white" style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)' }}>
                       <TrendingUp className="w-2.5 h-2.5" /> HOT
                     </span>
                   )}
                   {model.is_popular && (
-                    <span
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                      style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
-                    >
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}>
                       <Star className="w-2.5 h-2.5" /> Popular
                     </span>
                   )}
                 </div>
-                {model.name !== displayName && (
+                {model.stage_name && model.name !== model.stage_name && (
                   <p className="text-sm text-white/45">{model.name}</p>
                 )}
                 <div className="flex items-center gap-3 mt-1.5 flex-wrap">
@@ -187,6 +152,7 @@ export function ModelDetailPage() {
                     </div>
                   )}
                   {model.age && <span className="text-xs text-white/40">{model.age} years old</span>}
+                  {model.nationality && <span className="text-xs text-white/40">{model.nationality}</span>}
                 </div>
               </div>
 
@@ -209,20 +175,41 @@ export function ModelDetailPage() {
             )}
 
             {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-8">
               {model.height && <StatBadge label="Height" value={model.height} />}
+              {model.weight && <StatBadge label="Weight" value={model.weight} />}
+              {model.figure_size && <StatBadge label="Figure" value={model.figure_size} />}
               {model.hair_color && <StatBadge label="Hair" value={model.hair_color} />}
               {model.eye_color && <StatBadge label="Eyes" value={model.eye_color} />}
               {model.nationality && <StatBadge label="Nationality" value={model.nationality} />}
             </div>
+
+            {/* Tags */}
+            {model.tags && model.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-6">
+                {model.tags.map(tag => (
+                  <span key={tag} className="px-3 py-1 rounded-full text-xs text-white/50" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)' }}>
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Social links */}
+            {model.website && (
+              <div className="mb-8">
+                <a href={model.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors">
+                  <Globe className="w-4 h-4" />
+                  {model.website}
+                </a>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Posts section */}
         <div className="px-4 md:px-5">
-          <h2 className="text-lg font-bold text-white mb-5 tracking-tight">
-            Collections ({posts.length})
-          </h2>
+          <h2 className="text-lg font-bold text-white mb-5 tracking-tight">Collections ({posts.length})</h2>
           {posts.length === 0 ? (
             <div className="py-16 text-center text-white/30">No collections yet</div>
           ) : (

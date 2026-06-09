@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { Header } from '@/components/Header'
 import { CategoryCard } from '@/components/CategoryCard'
 import { supabase, type Category } from '@/lib/supabase'
+import { useSEO } from '@/hooks/useSEO'
 
 export function CategoriesPage() {
+  useSEO({ title: 'Categories', description: 'Browse content by category. Discover lifestyle, fashion, fitness and more creator collections.' })
   const [categories, setCategories] = useState<Category[]>([])
   const [postCounts, setPostCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)

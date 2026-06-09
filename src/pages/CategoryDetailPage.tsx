@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { supabase, type Post, type Category } from '@/lib/supabase'
 import { ContentCard } from '@/components/ContentCard'
 import { Header } from '@/components/Header'
+import { useSEO } from '@/hooks/useSEO'
 
 const categoryGradients: Record<string, string> = {
   lifestyle: 'linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%)',
@@ -19,6 +20,11 @@ export function CategoryDetailPage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+
+  useSEO({
+    title: category?.name,
+    description: category?.description ?? `Browse ${category?.name ?? ''} collections.`,
+  })
 
   useEffect(() => {
     if (!slug) return

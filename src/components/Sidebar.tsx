@@ -1,11 +1,14 @@
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  LayoutGrid, Clapperboard, MessageCircle, User,
-  BookMarked, LayoutDashboard, CreditCard, Gift,
-  MessageSquare, Key, ChevronDown, Flame, X
+  LayoutGrid, MessageCircle, User,
+  BookMarked, CreditCard, Gift,
+  MessageSquare, Key, ChevronDown, Flame, X,
+  Search, Grid3X3, Settings, Users, TrendingUp, Star, Sparkles
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { supabase, type Model } from '@/lib/supabase'
 
 type NavItem = {
   icon: React.ElementType
@@ -16,16 +19,15 @@ type NavItem = {
 
 const menuItems: NavItem[] = [
   { icon: LayoutGrid, label: 'Browse', to: '/' },
-  { icon: User, label: 'Models', to: '/models' },
-  { icon: LayoutDashboard, label: 'Categories', to: '/categories' },
-  { icon: Clapperboard, label: 'Studio', to: '/studio', disabled: true },
+  { icon: Users, label: 'Models', to: '/models' },
+  { icon: Grid3X3, label: 'Categories', to: '/categories' },
+  { icon: Search, label: 'Search', to: '/search' },
   { icon: MessageCircle, label: 'Chat', to: '/chat', disabled: true },
   { icon: User, label: 'Account', to: '/account' },
 ]
 
 const libraryItems: NavItem[] = [
   { icon: BookMarked, label: 'My Lists', to: '/mega' },
-  { icon: LayoutDashboard, label: 'Search', to: '/search' },
   { icon: CreditCard, label: 'Plans', to: '/account#plans', disabled: true },
   { icon: Gift, label: 'Rewards', to: '/account#rewards', disabled: true },
 ]
@@ -47,9 +49,7 @@ function SidebarItem({ item }: { item: NavItem }) {
       className={({ isActive }) =>
         cn(
           'relative flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group',
-          isActive
-            ? 'text-white'
-            : 'text-white/60 hover:text-white'
+          isActive ? 'text-white' : 'text-white/60 hover:text-white'
         )
       }
       style={({ isActive }) =>
@@ -74,6 +74,86 @@ function SidebarItem({ item }: { item: NavItem }) {
         </>
       )}
     </NavLink>
+  )
+}
+
+function ModelsMiniList() {
+  const [models, setModels] = useState<Model[]>([])
+  const [tab, setTab] = useState<'trending' | 'popular' | 'new'>('trending')
+
+  useEffect(() => {
+    let q = supabase.from('models').select('id, name, slug, stage_name, cover_image, is_trending, is_popular, created_at')
+    if (tab === 'trending') q = q.eq('is_trending', true).order('created_at', { ascending: false })
+    else if (tab === 'popular') q = q.eq('is_popular', true).order('created_at', { ascending: false })
+    else q = q.order('created_at', { ascending: false })
+
+    q.limit(5).then(({ data }) => {
+      if (data) setModels(data as Model[])
+    })
+  }, [tab])
+
+  const tabs = [
+    { id: 'trending' as const, icon: TrendingUp },
+    { id: 'popular' as const, icon: Star },
+    { id: 'new' as const, icon: Sparkles },
+  ]
+
+  return (
+    <div className="px-3">
+      <div className="flex items-center justify-between mb-2 px-1">
+        <p className="text-[10px] font-semibold tracking-widest text-white/25 uppercase">Models</p>
+        <div className="flex gap-0.5">
+          {tabs.map(({ id, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={cn(
+                'w-6 h-6 flex items-center justify-center rounded-lg transition-colors',
+                tab === id ? 'text-white' : 'text-white/25 hover:text-white/50'
+              )}
+              style={tab === id ? { background: 'rgba(255,90,60,0.2)' } : undefined}
+            >
+              <Icon className="w-3 h-3" />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-0.5">
+        {models.slice(0, 5).map(model => (
+          <NavLink
+            key={model.id}
+            to={`/model/${model.slug}`}
+            className="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-white/[0.05] transition-colors group"
+          >
+            <div className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0" style={{ background: 'rgba(255,90,60,0.2)' }}>
+              {model.cover_image ? (
+                <img src={model.cover_image} alt="" className="w-full h-full object-cover" loading="lazy" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="text-xs font-bold text-white">{(model.stage_name || model.name)[0]}</span>
+                </div>
+              )}
+            </div>
+            <span className="text-xs font-medium text-white/60 group-hover:text-white transition-colors truncate">
+              {model.stage_name || model.name}
+            </span>
+          </NavLink>
+        ))}
+
+        {models.length === 0 && (
+          <p className="text-xs text-white/20 px-2 py-3 text-center">No models found</p>
+        )}
+
+        <NavLink
+          to="/models"
+          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs text-white/35 hover:text-white/60 transition-colors mt-1"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+        >
+          View all models
+        </NavLink>
+      </div>
+    </div>
   )
 }
 
@@ -130,10 +210,10 @@ export function Sidebar({ open, onClose }: Props) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-5">
+        <div className="flex-1 overflow-y-auto pb-4 space-y-5">
           {/* Menu */}
-          <div>
-            <p className="text-[10px] font-semibold tracking-widest text-white/25 uppercase px-4 mb-2">Menu</p>
+          <div className="px-3">
+            <p className="text-[10px] font-semibold tracking-widest text-white/25 uppercase px-1 mb-2">Menu</p>
             <nav className="space-y-0.5">
               {menuItems.map((item) => (
                 <SidebarItem key={item.label} item={item} />
@@ -142,13 +222,18 @@ export function Sidebar({ open, onClose }: Props) {
           </div>
 
           {/* Library */}
-          <div>
-            <p className="text-[10px] font-semibold tracking-widest text-white/25 uppercase px-4 mb-2">Library</p>
+          <div className="px-3">
+            <p className="text-[10px] font-semibold tracking-widest text-white/25 uppercase px-1 mb-2">Library</p>
             <nav className="space-y-0.5">
               {libraryItems.map((item) => (
                 <SidebarItem key={item.label} item={item} />
               ))}
             </nav>
+          </div>
+
+          {/* Models mini section */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px' }}>
+            <ModelsMiniList />
           </div>
         </div>
 
@@ -163,6 +248,15 @@ export function Sidebar({ open, onClose }: Props) {
             <MessageSquare className="w-4 h-4 text-green-400" />
             <span>Support-Chat</span>
           </motion.button>
+
+          <NavLink
+            to="/admin"
+            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-white/50 hover:text-white transition-all"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            <Settings className="w-4 h-4 text-white/35" />
+            <span>Admin Dashboard</span>
+          </NavLink>
 
           <div className="flex items-center gap-2 px-4 py-2">
             <div
