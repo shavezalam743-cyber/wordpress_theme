@@ -3,12 +3,13 @@ import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft, HardDrive, Image, Video, Eye,
-  Clock, TrendingUp, Plus, Share2, Bookmark, ExternalLink,
+  Clock, TrendingUp, Plus, Bookmark, ExternalLink,
   ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { supabase, type Post, formatViews, formatTime } from '@/lib/supabase'
 import { ContentCard } from '@/components/ContentCard'
 import { Header } from '@/components/Header'
+import { ShareButton } from '@/components/ShareModal'
 import { useSEO } from '@/hooks/useSEO'
 
 function RelatedSection({ title, posts }: { title: string; posts: Post[] }) {
@@ -299,16 +300,7 @@ export function PostDetailPage() {
               Save
             </motion.button>
 
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium text-white/70 hover:text-white transition-all"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-              onClick={() => navigator.clipboard.writeText(window.location.href).catch(() => {})}
-            >
-              <Share2 className="w-4 h-4" />
-              Share
-            </motion.button>
+            <ShareButton url={window.location.href} title={post.title} />
           </div>
 
           {/* Related by category */}
