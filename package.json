@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@supabase/supabase-js": "^2.108.0",
+    "@supabase/supabase-js": "^2.108.1",
     "@tailwindcss/vite": "^4.2.1",
     "@types/react-router-dom": "^5.3.3",
     "class-variance-authority": "^0.7.1",
