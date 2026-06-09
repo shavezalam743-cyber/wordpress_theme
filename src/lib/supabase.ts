@@ -92,6 +92,63 @@ export type SiteSettings = {
   font_family: string
 }
 
+export type UserRole = 'admin' | 'moderator' | 'subscriber' | 'guest'
+export type SubscriptionTier = 'free' | 'pro' | 'pro_plus'
+
+export type UserProfile = {
+  id: string
+  user_id: string
+  email: string
+  name: string | null
+  avatar_url: string | null
+  role: UserRole
+  coins: number
+  subscription_tier: SubscriptionTier | null
+  subscription_expires_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type NotificationType = 'system' | 'content' | 'promo' | 'subscription' | 'coins'
+
+export type Notification = {
+  id: string
+  user_id: string
+  type: NotificationType
+  title: string
+  message: string
+  data: Record<string, unknown>
+  read: boolean
+  created_at: string
+}
+
+export type CoinTransactionType = 'purchase' | 'earn' | 'spend' | 'refund' | 'bonus'
+
+export type CoinTransaction = {
+  id: string
+  user_id: string
+  amount: number
+  balance_after: number
+  type: CoinTransactionType
+  description: string | null
+  reference_id: string | null
+  created_at: string
+}
+
+export type SubscriptionStatus = 'active' | 'expired' | 'cancelled'
+
+export type Subscription = {
+  id: string
+  user_id: string
+  tier: 'pro' | 'pro_plus'
+  status: SubscriptionStatus
+  started_at: string
+  expires_at: string
+  payment_ref: string | null
+  amount: number | null
+  created_at: string
+}
+
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
   const { data } = await supabase.from('settings').select('value').eq('key', key).single()
   if (!data) return fallback

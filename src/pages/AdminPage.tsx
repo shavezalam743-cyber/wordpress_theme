@@ -5,14 +5,14 @@ import {
   Megaphone, Palette, Plus, Pencil, Trash2, X,
   Eye, Image, Video,
   Check, BarChart3, Settings, Save,
-  AlertTriangle, Loader2, Search, ExternalLink
+  AlertTriangle, Loader2, Search, ExternalLink, Coins, Crown
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { supabase, slugify, type Post, type Model, type Category, type Tag as TagType, type FooterAd } from '@/lib/supabase'
+import { supabase, slugify, type Post, type Model, type Category, type Tag as TagType, type FooterAd, type UserProfile, type UserRole, type SubscriptionTier } from '@/lib/supabase'
 import { useSEO } from '@/hooks/useSEO'
 import { cn } from '@/lib/utils'
 
-type AdminTab = 'overview' | 'posts' | 'models' | 'categories' | 'tags' | 'ads' | 'theme'
+type AdminTab = 'overview' | 'posts' | 'models' | 'categories' | 'tags' | 'ads' | 'users' | 'coins' | 'theme'
 
 // ── Shared helpers ──────────────────────────────────────────────
 
@@ -990,6 +990,308 @@ function AdsPanel() {
   )
 }
 
+// ── Users Management Panel ────────────────────────────────────────
+
+function UsersPanel() {
+  const [users, setUsers] = useState<UserProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all')
+  const [editUser, setEditUser] = useState<UserProfile | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    let query = supabase.from('user_profiles').select('*').order('created_at', { ascending: false })
+    if (roleFilter !== 'all') query = query.eq('role', roleFilter)
+    query.then(({ data }) => {
+      if (data) setUsers(data as UserProfile[])
+      setLoading(false)
+    })
+  }, [roleFilter])
+
+  const filtered = users.filter(u =>
+    u.name?.toLowerCase().includes(search.toLowerCase()) ||
+    u.email.toLowerCase().includes(search.toLowerCase())
+  )
+
+  async function updateUser(updates: Partial<UserProfile>) {
+    if (!editUser) return
+    setSaving(true)
+    await supabase.from('user_profiles').update(updates).eq('id', editUser.id)
+    setSaving(false)
+    setModalOpen(false)
+    setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, ...updates } : u))
+  }
+
+  async function addCoins(amount: number) {
+    if (!editUser) return
+    setSaving(true)
+    const newBalance = editUser.coins + amount
+    await supabase.from('user_profiles').update({ coins: newBalance }).eq('id', editUser.id)
+    await supabase.from('coin_transactions').insert({
+      user_id: editUser.user_id,
+      amount,
+      balance_after: newBalance,
+      type: amount > 0 ? 'bonus' : 'spend',
+      description: amount > 0 ? 'Admin bonus' : 'Admin deduction'
+    })
+    setSaving(false)
+    setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, coins: newBalance } : u))
+    setEditUser(prev => prev ? { ...prev, coins: newBalance } : null)
+  }
+
+  const roleColors: Record<UserRole, 'red' | 'blue' | 'orange' | 'gray'> = {
+    admin: 'red',
+    moderator: 'blue',
+    subscriber: 'orange',
+    guest: 'gray'
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search users..."
+              className="pl-9 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-white/30 outline-none"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)' }}
+            />
+          </div>
+          <select
+            value={roleFilter}
+            onChange={e => setRoleFilter(e.target.value as UserRole | 'all')}
+            className="px-3 py-2 rounded-xl text-sm text-white outline-none"
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)' }}
+          >
+            <option value="all">All Roles</option>
+            <option value="admin">Admin</option>
+            <option value="moderator">Moderator</option>
+            <option value="subscriber">Subscriber</option>
+            <option value="guest">Guest</option>
+          </select>
+          <span className="text-sm text-white/40">{users.length} users</span>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-white/30" /></div>
+      ) : (
+        <div className="rounded-2xl overflow-hidden" style={panelStyle}>
+          <table className="w-full">
+            <thead>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                {['User', 'Role', 'Subscription', 'Coins', 'Joined', ''].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-white/40 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(user => (
+                <tr key={user.id} className="transition-colors hover:bg-white/[0.02]" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      {user.avatar_url ? (
+                        <img src={user.avatar_url} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)' }}>
+                          <span className="text-white text-xs font-bold">{(user.name ?? user.email)[0].toUpperCase()}</span>
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{user.name ?? 'No name'}</p>
+                        <p className="text-xs text-white/35 truncate">{user.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3"><Badge color={roleColors[user.role]}>{user.role}</Badge></td>
+                  <td className="px-4 py-3">
+                    {user.subscription_tier ? (
+                      <span className="text-xs text-white/55">
+                        {user.subscription_tier === 'pro_plus' ? 'Pro+' : 'Pro'}
+                        {user.subscription_expires_at && ` (${new Date(user.subscription_expires_at).toLocaleDateString()})`}
+                      </span>
+                    ) : <span className="text-xs text-white/30">Free</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-sm text-white/70">{user.coins.toLocaleString()}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs text-white/35">{new Date(user.created_at).toLocaleDateString()}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <ActionBtn variant="edit" onClick={() => { setEditUser(user); setModalOpen(true) }} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {modalOpen && editUser && (
+          <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Edit User">
+            <div className="space-y-5">
+              <Field label="Role">
+                <select
+                  value={editUser.role}
+                  onChange={e => setEditUser({ ...editUser, role: e.target.value as UserRole })}
+                  className={inputClass}
+                  style={inputStyle}
+                >
+                  <option value="guest">Guest</option>
+                  <option value="subscriber">Subscriber</option>
+                  <option value="moderator">Moderator</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </Field>
+
+              <Field label="Subscription Tier">
+                <select
+                  value={editUser.subscription_tier ?? 'free'}
+                  onChange={e => setEditUser({ ...editUser, subscription_tier: e.target.value === 'free' ? null : e.target.value as SubscriptionTier })}
+                  className={inputClass}
+                  style={inputStyle}
+                >
+                  <option value="free">Free</option>
+                  <option value="pro">Pro</option>
+                  <option value="pro_plus">Pro+</option>
+                </select>
+              </Field>
+
+              <Field label="Coins">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-bold text-white">{editUser.coins}</span>
+                  <button onClick={() => addCoins(100)} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: 'rgba(34,197,94,0.2)', border: '1px solid rgba(34,197,94,0.3)' }}>+100</button>
+                  <button onClick={() => addCoins(500)} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: 'rgba(34,197,94,0.2)', border: '1px solid rgba(34,197,94,0.3)' }}>+500</button>
+                  <button onClick={() => addCoins(-100)} className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400" style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.25)' }}>-100</button>
+                </div>
+              </Field>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button onClick={() => setModalOpen(false)} className="px-5 py-2.5 rounded-xl text-sm font-medium text-white/60" style={{ background: 'rgba(255,255,255,0.07)' }}>Cancel</button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => updateUser({ role: editUser.role, subscription_tier: editUser.subscription_tier })}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)' }}
+                >
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Save Changes
+                </motion.button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── Coins & Subscription Settings Panel ───────────────────────────
+
+function CoinsPanel() {
+  const [settings, setSettings] = useState({
+    coin_rate_usd: '0.01',
+    pro_monthly_price: '9.99',
+    pro_plus_monthly_price: '19.99',
+    telegram_link: '',
+    bonus_signup: '50',
+    bonus_referral: '100'
+  })
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    supabase.from('settings').select('*').in('key', ['coin_rate_usd', 'pro_monthly_price', 'pro_plus_monthly_price', 'telegram_link', 'bonus_signup', 'bonus_referral'])
+    .then(({ data }) => {
+      if (data) {
+        const map = Object.fromEntries(data.map((d: { key: string; value: unknown }) => [d.key, String(d.value)]))
+        setSettings(prev => ({ ...prev, ...map }))
+      }
+    })
+  }, [])
+
+  async function save() {
+    setSaving(true)
+    for (const [key, value] of Object.entries(settings)) {
+      await supabase.from('settings').upsert({ key, value, updated_at: new Date().toISOString() })
+    }
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="p-6 rounded-2xl" style={panelStyle}>
+          <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+            <Coins className="w-5 h-5" style={{ color: '#f59e0b' }} />
+            Coin Settings
+          </h3>
+          <div className="space-y-4">
+            <Field label="Coin Rate (USD)">
+              <TextInput value={settings.coin_rate_usd} onChange={v => setSettings({ ...settings, coin_rate_usd: v })} placeholder="0.01" />
+            </Field>
+            <Field label="Signup Bonus Coins">
+              <TextInput value={settings.bonus_signup} onChange={v => setSettings({ ...settings, bonus_signup: v })} placeholder="50" />
+            </Field>
+            <Field label="Referral Bonus Coins">
+              <TextInput value={settings.bonus_referral} onChange={v => setSettings({ ...settings, bonus_referral: v })} placeholder="100" />
+            </Field>
+          </div>
+        </div>
+
+        <div className="p-6 rounded-2xl" style={panelStyle}>
+          <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+            <Crown className="w-5 h-5" style={{ color: '#f59e0b' }} />
+            Subscription Pricing
+          </h3>
+          <div className="space-y-4">
+            <Field label="Pro Monthly Price (USD)">
+              <TextInput value={settings.pro_monthly_price} onChange={v => setSettings({ ...settings, pro_monthly_price: v })} placeholder="9.99" />
+            </Field>
+            <Field label="Pro+ Monthly Price (USD)">
+              <TextInput value={settings.pro_plus_monthly_price} onChange={v => setSettings({ ...settings, pro_plus_monthly_price: v })} placeholder="19.99" />
+            </Field>
+          </div>
+        </div>
+
+        <div className="p-6 rounded-2xl md:col-span-2" style={panelStyle}>
+          <h3 className="text-base font-bold text-white mb-4">Telegram Integration</h3>
+          <div className="space-y-4">
+            <Field label="Telegram Channel/Group Link" hint="Users will be redirected here after Pro+ purchase">
+              <TextInput value={settings.telegram_link} onChange={v => setSettings({ ...settings, telegram_link: v })} placeholder="https://t.me/yourchannel" />
+            </Field>
+          </div>
+        </div>
+      </div>
+
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={save}
+        disabled={saving}
+        className="flex items-center gap-2 px-8 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50"
+        style={{ background: saved ? 'rgba(34,197,94,0.2)' : 'linear-gradient(135deg, #ff5a3c, #ff784e)', border: saved ? '1px solid rgba(34,197,94,0.4)' : 'none' }}
+      >
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4 text-green-400" /> : <Save className="w-4 h-4" />}
+        {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Settings'}
+      </motion.button>
+    </div>
+  )
+}
+
 // ── Theme Settings Panel ────────────────────────────────────────
 
 function ThemePanel() {
@@ -1225,6 +1527,8 @@ export function AdminPage() {
     { id: 'categories', label: 'Categories', icon: FolderOpen },
     { id: 'tags', label: 'Tags', icon: Tag },
     { id: 'ads', label: 'Footer Ads', icon: Megaphone },
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'coins', label: 'Coins & Subs', icon: Coins },
     { id: 'theme', label: 'Theme', icon: Palette },
   ]
 
@@ -1235,6 +1539,8 @@ export function AdminPage() {
     categories: 'Categories',
     tags: 'Tags',
     ads: 'Footer Ads Manager',
+    users: 'Users Management',
+    coins: 'Coins & Subscriptions',
     theme: 'Theme Settings',
   }
 
@@ -1301,6 +1607,8 @@ export function AdminPage() {
                 {activeTab === 'categories' && <CategoriesPanel categories={categories} onReload={loadCategories} />}
                 {activeTab === 'tags' && <TagsPanel />}
                 {activeTab === 'ads' && <AdsPanel />}
+                {activeTab === 'users' && <UsersPanel />}
+                {activeTab === 'coins' && <CoinsPanel />}
                 {activeTab === 'theme' && <ThemePanel />}
               </motion.div>
             </AnimatePresence>

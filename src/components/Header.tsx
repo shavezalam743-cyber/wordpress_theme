@@ -3,9 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, SlidersHorizontal, ChevronDown, Users,
-  Grid3X3, Bell, Clock, TrendingUp, Eye, Shuffle,
-  HardDrive, History, Menu
+  Grid3X3, Clock, TrendingUp, Eye, Shuffle,
+  HardDrive, History, Menu, User, Settings, LogOut, Coins, Crown
 } from 'lucide-react'
+import { useAuth } from '@/lib/auth'
+import { NotificationBell } from '@/components/NotificationPanel'
 
 export type SortOption = 'newest' | 'trending' | 'popular' | 'views' | 'random' | 'size' | 'history' | 'oldest'
 
@@ -44,13 +46,19 @@ export function Header({
   showSortFilter = false,
 }: Props) {
   const [sortOpen, setSortOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const userMenuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const { user, profile, signOut, isAdmin } = useAuth()
 
   useEffect(() => {
     function handleOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setSortOpen(false)
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
       }
     }
     document.addEventListener('mousedown', handleOutside)
@@ -61,6 +69,12 @@ export function Header({
     if (e.key === 'Enter' && search.trim()) {
       navigate(`/search?q=${encodeURIComponent(search.trim())}`)
     }
+  }
+
+  async function handleSignOut() {
+    await signOut()
+    setUserMenuOpen(false)
+    navigate('/')
   }
 
   return (
@@ -185,7 +199,7 @@ export function Header({
         </div>
       )}
 
-      {/* Right nav buttons — hidden on small screens */}
+      {/* Right nav buttons */}
       <div className="hidden md:flex items-center gap-2 flex-shrink-0">
         <Link to="/models">
           <motion.div
@@ -211,15 +225,118 @@ export function Header({
           </motion.div>
         </Link>
 
-        <motion.button
-          whileHover={{ scale: 1.04 }}
-          whileTap={{ scale: 0.96 }}
-          className="relative w-10 h-10 flex items-center justify-center rounded-xl text-white/55 hover:text-white transition-all"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: '#ff5a3c' }} />
-        </motion.button>
+        {/* Notification bell - only for logged in users */}
+        {user && <NotificationBell />}
+
+        {/* User menu or login button */}
+        {user ? (
+          <div className="relative" ref={userMenuRef}>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl transition-colors"
+              style={{ background: userMenuOpen ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-lg object-cover" />
+              ) : (
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)' }}>
+                  <User className="w-3.5 h-3.5 text-white" />
+                </div>
+              )}
+              <ChevronDown
+                className="w-3.5 h-3.5 text-white/40 transition-transform"
+                style={{ transform: userMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              />
+            </motion.button>
+
+            <AnimatePresence>
+              {userMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                  className="absolute top-full mt-2 right-0 rounded-xl overflow-hidden z-50 py-1.5 min-w-56"
+                  style={{
+                    background: 'rgba(16,16,16,0.98)',
+                    backdropFilter: 'blur(32px)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.7)',
+                  }}
+                >
+                  <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <p className="text-sm font-medium text-white">{profile?.name ?? 'User'}</p>
+                    <p className="text-xs text-white/50">{profile?.email}</p>
+                    {profile?.coins !== undefined && profile.coins > 0 && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Coins className="w-3.5 h-3.5" style={{ color: '#f59e0b' }} />
+                        <span className="text-xs font-medium" style={{ color: '#f59e0b' }}>{profile.coins} coins</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <Link to="/profile" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors">
+                    <User className="w-4 h-4" />
+                    My Profile
+                  </Link>
+
+                  {profile?.subscription_tier && profile.subscription_tier !== 'free' && (
+                    <div className="flex items-center gap-3 px-4 py-2.5 text-sm" style={{ color: '#f59e0b' }}>
+                      <Crown className="w-4 h-4" />
+                      {profile.subscription_tier === 'pro_plus' ? 'Pro+' : 'Pro'} Member
+                    </div>
+                  )}
+
+                  {isAdmin && (
+                    <Link to="/admin" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors">
+                      <Settings className="w-4 h-4" />
+                      Admin Dashboard
+                    </Link>
+                  )}
+
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-white/5 transition-colors"
+                    style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        ) : (
+          <Link to="/login">
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
+              style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)', boxShadow: '0 4px 16px rgba(255,90,60,0.4)' }}
+            >
+              <User className="w-4 h-4" />
+              Login
+            </motion.div>
+          </Link>
+        )}
+      </div>
+
+      {/* Mobile: Login/User button */}
+      <div className="md:hidden">
+        {user ? (
+          <Link to="/profile" className="w-10 h-10 flex items-center justify-center rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-lg object-cover" />
+            ) : (
+              <User className="w-4 h-4 text-white/60" />
+            )}
+          </Link>
+        ) : (
+          <Link to="/login" className="w-10 h-10 flex items-center justify-center rounded-xl" style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)' }}>
+            <User className="w-4 h-4 text-white" />
+          </Link>
+        )}
       </div>
     </header>
   )
