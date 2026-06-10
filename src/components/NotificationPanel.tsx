@@ -26,19 +26,22 @@ export function NotificationBell() {
 
     fetchNotifications()
 
-    const channel = supabase
-      .channel('notifications')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`
-      }, (payload) => {
-        setNotifications(prev => [payload.new as Notification, ...prev])
-      })
-      .subscribe()
+    const channelName = `notifications_${user.id}`
+    const channel = supabase.channel(channelName)
+
+    channel.on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'notifications',
+      filter: `user_id=eq.${user.id}`
+    }, (payload) => {
+      setNotifications(prev => [payload.new as Notification, ...prev])
+    })
+
+    channel.subscribe()
 
     return () => {
+      channel.unsubscribe()
       supabase.removeChannel(channel)
     }
   }, [user])
