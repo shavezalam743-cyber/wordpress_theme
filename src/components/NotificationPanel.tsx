@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, X, Trash2, Loader2 } from 'lucide-react'
 import { supabase, type Notification } from '@/lib/supabase'
@@ -13,45 +13,23 @@ const typeColors: Record<string, string> = {
   coins: '#8b5cf6'
 }
 
+const POLL_INTERVAL = 30_000
+
 export function NotificationBell() {
   const { user } = useAuth()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const unreadCount = notifications.filter(n => !n.read).length
 
-  useEffect(() => {
-    if (!user) return
-
-    fetchNotifications()
-
-    const channelName = `notifications_${user.id}`
-    const channel = supabase.channel(channelName)
-
-    channel.on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'notifications',
-      filter: `user_id=eq.${user.id}`
-    }, (payload) => {
-      setNotifications(prev => [payload.new as Notification, ...prev])
-    })
-
-    channel.subscribe()
-
-    return () => {
-      channel.unsubscribe()
-      supabase.removeChannel(channel)
-    }
-  }, [user])
-
-  async function fetchNotifications() {
+  async function fetchNotifications(userId: string) {
     setLoading(true)
     const { data } = await supabase
       .from('notifications')
       .select('*')
-      .eq('user_id', user!.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50)
 
@@ -59,13 +37,41 @@ export function NotificationBell() {
     setLoading(false)
   }
 
+  useEffect(() => {
+    if (!user) {
+      setNotifications([])
+      return
+    }
+
+    fetchNotifications(user.id)
+
+    intervalRef.current = setInterval(() => {
+      fetchNotifications(user.id)
+    }, POLL_INTERVAL)
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [user?.id])
+
+  // Re-fetch fresh data whenever the panel is opened
+  useEffect(() => {
+    if (open && user) {
+      fetchNotifications(user.id)
+    }
+  }, [open, user?.id])
+
   async function markAsRead(id: string) {
     await supabase.from('notifications').update({ read: true }).eq('id', id)
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
   }
 
   async function markAllRead() {
-    await supabase.from('notifications').update({ read: true }).eq('user_id', user!.id).eq('read', false)
+    if (!user) return
+    await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false)
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
   }
 
