@@ -10,6 +10,8 @@ import { supabase, type Post, formatViews, formatTime } from '@/lib/supabase'
 import { ContentCard } from '@/components/ContentCard'
 import { Header } from '@/components/Header'
 import { ShareButton } from '@/components/ShareModal'
+import { PostInteractions } from '@/components/PostInteractions'
+import { Comments } from '@/components/Comments'
 import { useSEO } from '@/hooks/useSEO'
 
 function RelatedSection({ title, posts }: { title: string; posts: Post[] }) {
@@ -301,6 +303,19 @@ export function PostDetailPage() {
             </motion.button>
 
             <ShareButton url={window.location.href} title={post.title} />
+          </div>
+
+          {/* Post interactions: like/dislike/views */}
+          <div className="mb-8">
+            <PostInteractions post={post} />
+          </div>
+
+          {/* Comments section */}
+          <div
+            className="rounded-2xl p-6 mb-12"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            <Comments postId={post.id} />
           </div>
 
           {/* Related by category */}

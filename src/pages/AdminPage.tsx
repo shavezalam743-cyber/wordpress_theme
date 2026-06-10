@@ -11,8 +11,9 @@ import { Link } from 'react-router-dom'
 import { supabase, slugify, type Post, type Model, type Category, type Tag as TagType, type FooterAd, type UserProfile, type UserRole, type SubscriptionTier } from '@/lib/supabase'
 import { useSEO } from '@/hooks/useSEO'
 import { cn } from '@/lib/utils'
+import type { ExtendedPost } from '@/lib/types'
 
-type AdminTab = 'overview' | 'posts' | 'models' | 'categories' | 'tags' | 'ads' | 'users' | 'coins' | 'theme'
+type AdminTab = 'overview' | 'posts' | 'models' | 'categories' | 'tags' | 'ads' | 'users' | 'coins' | 'engagement' | 'theme'
 
 // ── Shared helpers ──────────────────────────────────────────────
 
@@ -1292,6 +1293,160 @@ function CoinsPanel() {
   )
 }
 
+// ── Engagement Panel (Views, Likes, Comments) ─────────────────────────────────
+
+function EngagementPanel() {
+  const [posts, setPosts] = useState<ExtendedPost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    loadPosts()
+  }, [])
+
+  async function loadPosts() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('posts')
+      .select('id, title, slug, view_count, cover_image')
+      .order('view_count', { ascending: false })
+      .limit(100)
+    if (data) setPosts(data as ExtendedPost[])
+    setLoading(false)
+  }
+
+  async function updatePostStat(postId: string, field: string, value: number) {
+    setSaving(true)
+    await supabase.from('posts').update({ [field]: value }).eq('id', postId)
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, [field]: value } : p))
+    setSaving(false)
+  }
+
+  async function resetAllStats(postId: string) {
+    setSaving(true)
+    await supabase.from('posts').update({
+      view_count: 0
+    }).eq('id', postId)
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, view_count: 0 } : p))
+    setSaving(false)
+  }
+
+  const filtered = posts.filter(p => p.title.toLowerCase().includes(search.toLowerCase()))
+
+  const totalViews = posts.reduce((sum, p) => sum + (p.view_count ?? 0), 0)
+
+  return (
+    <div>
+      {/* Summary Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="p-4 rounded-xl" style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
+          <p className="text-xs text-white/50 mb-1">Total Views</p>
+          <p className="text-2xl font-bold text-green-400">{totalViews.toLocaleString()}</p>
+        </div>
+        <div className="p-4 rounded-xl" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
+          <p className="text-xs text-white/50 mb-1">Total Posts</p>
+          <p className="text-2xl font-bold text-blue-400">{posts.length.toLocaleString()}</p>
+        </div>
+        <div className="p-4 rounded-xl" style={{ background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)' }}>
+          <p className="text-xs text-white/50 mb-1">Avg Views</p>
+          <p className="text-2xl font-bold text-purple-400">{posts.length > 0 ? Math.round(totalViews / posts.length).toLocaleString() : 0}</p>
+        </div>
+        <div className="p-4 rounded-xl" style={{ background: 'rgba(255,90,60,0.1)', border: '1px solid rgba(255,90,60,0.2)' }}>
+          <p className="text-xs text-white/50 mb-1">Trending</p>
+          <p className="text-2xl font-bold text-orange-400">{posts.filter(p => p.is_trending).length}</p>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search posts..."
+            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-white/30 outline-none"
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)' }}
+          />
+        </div>
+        <span className="text-sm text-white/40">{filtered.length} posts</span>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-white/30" /></div>
+      ) : (
+        <div className="rounded-2xl overflow-x-auto" style={panelStyle}>
+          <table className="w-full min-w-[600px]">
+            <thead>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                {['Post', 'Views', 'Actions'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-white/40 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(post => (
+                <tr key={post.id} className="transition-colors hover:bg-white/[0.02]" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      {post.cover_image ? (
+                        <img src={post.cover_image} alt="" className="w-10 h-12 rounded-lg object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-10 h-12 rounded-lg flex-shrink-0" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white truncate max-w-[180px]">{post.title}</p>
+                        <p className="text-xs text-white/35 truncate max-w-[180px]">{post.slug}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="number"
+                      value={post.view_count ?? 0}
+                      onChange={e => updatePostStat(post.id, 'view_count', parseInt(e.target.value) || 0)}
+                      className="w-24 px-2 py-1 rounded-lg text-sm text-white text-center"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => resetAllStats(post.id)}
+                        disabled={saving}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                        style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
+                      >
+                        Reset
+                      </motion.button>
+                      <a
+                        href={`/post/${post.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-white/40 hover:text-white transition-colors"
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                      >
+                        View
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && (
+            <div className="py-16 text-center text-white/30 text-sm">No posts found</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Theme Settings Panel ────────────────────────────────────────
 
 function ThemePanel() {
@@ -1529,6 +1684,7 @@ export function AdminPage() {
     { id: 'ads', label: 'Footer Ads', icon: Megaphone },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'coins', label: 'Coins & Subs', icon: Coins },
+    { id: 'engagement', label: 'Engagement', icon: BarChart3 },
     { id: 'theme', label: 'Theme', icon: Palette },
   ]
 
@@ -1541,6 +1697,7 @@ export function AdminPage() {
     ads: 'Footer Ads Manager',
     users: 'Users Management',
     coins: 'Coins & Subscriptions',
+    engagement: 'Views, Likes & Comments',
     theme: 'Theme Settings',
   }
 
@@ -1609,6 +1766,7 @@ export function AdminPage() {
                 {activeTab === 'ads' && <AdsPanel />}
                 {activeTab === 'users' && <UsersPanel />}
                 {activeTab === 'coins' && <CoinsPanel />}
+                {activeTab === 'engagement' && <EngagementPanel />}
                 {activeTab === 'theme' && <ThemePanel />}
               </motion.div>
             </AnimatePresence>
