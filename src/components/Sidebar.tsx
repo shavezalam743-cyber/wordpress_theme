@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase, type Model } from '@/lib/supabase'
+import { useAuth } from '@/lib/auth'
 
 type NavItem = {
   icon: React.ElementType
@@ -163,6 +164,8 @@ type Props = {
 }
 
 export function Sidebar({ open, onClose }: Props) {
+  const { isAdmin } = useAuth()
+
   return (
     <AnimatePresence>
       <aside
@@ -249,14 +252,16 @@ export function Sidebar({ open, onClose }: Props) {
             <span>Support-Chat</span>
           </motion.button>
 
-          <NavLink
-            to="/admin"
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-white/50 hover:text-white transition-all"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
-          >
-            <Settings className="w-4 h-4 text-white/35" />
-            <span>Admin Dashboard</span>
-          </NavLink>
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-white/50 hover:text-white transition-all"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+            >
+              <Settings className="w-4 h-4 text-white/35" />
+              <span>Admin Dashboard</span>
+            </NavLink>
+          )}
 
           <div className="flex items-center gap-2 px-4 py-2">
             <div

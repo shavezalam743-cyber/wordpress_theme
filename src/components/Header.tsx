@@ -276,9 +276,9 @@ export function Header({
                     )}
                   </div>
 
-                  <Link to="/profile" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors">
+                  <Link to="/account" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors">
                     <User className="w-4 h-4" />
-                    My Profile
+                    My Account
                   </Link>
 
                   {profile?.subscription_tier && profile.subscription_tier !== 'free' && (
@@ -325,7 +325,7 @@ export function Header({
       {/* Mobile: Login/User button */}
       <div className="md:hidden">
         {user ? (
-          <Link to="/profile" className="w-10 h-10 flex items-center justify-center rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
+          <Link to="/account" className="w-10 h-10 flex items-center justify-center rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
             {profile?.avatar_url ? (
               <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-lg object-cover" />
             ) : (

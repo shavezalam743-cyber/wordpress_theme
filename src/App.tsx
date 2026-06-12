@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AuthProvider } from './lib/auth'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -16,6 +16,13 @@ import { AdminPage } from './pages/AdminPage'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
+
+// Redirect /single/:slug -> /post/:slug preserving the actual slug value
+function SingleToPostRedirect() {
+  const { slug } = useParams<{ slug: string }>()
+  return <Navigate to={`/post/${slug}`} replace />
+}
 
 function App() {
   return (
@@ -28,15 +35,20 @@ function App() {
             <Route path="/model/:slug" element={<Layout><ModelDetailPage /></Layout>} />
             <Route path="/posts" element={<Navigate to="/" replace />} />
             <Route path="/post/:slug" element={<Layout><PostDetailPage /></Layout>} />
-            <Route path="/single/:slug" element={<Navigate to="/post/:slug" replace />} />
+            <Route path="/single/:slug" element={<SingleToPostRedirect />} />
             <Route path="/categories" element={<Layout><CategoriesPage /></Layout>} />
             <Route path="/category/:slug" element={<Layout><CategoryDetailPage /></Layout>} />
             <Route path="/search" element={<Layout><SearchPage /></Layout>} />
-            <Route path="/account" element={<Layout><AccountPage /></Layout>} />
+            <Route path="/account" element={
+              <ProtectedRoute>
+                <Layout><AccountPage /></Layout>
+              </ProtectedRoute>
+            } />
             <Route path="/mega" element={<Layout><MegaPage /></Layout>} />
             <Route path="/login" element={<Layout><LoginPage /></Layout>} />
             <Route path="/signup" element={<Layout><SignupPage /></Layout>} />
             <Route path="/forgot-password" element={<Layout><ForgotPasswordPage /></Layout>} />
+            <Route path="/reset-password" element={<Layout><ResetPasswordPage /></Layout>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminPage /></ProtectedRoute>} />
             <Route path="/admin/*" element={<ProtectedRoute requireAdmin><AdminPage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
