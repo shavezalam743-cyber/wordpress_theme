@@ -25,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Asli Role based system
   const role = profile?.role ?? 'guest'
   const isAdmin = role === 'admin'
   const isModerator = role === 'moderator' || isAdmin

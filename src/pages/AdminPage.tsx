@@ -5,7 +5,7 @@ import {
   Megaphone, Palette, Plus, Pencil, Trash2, X,
   Eye, Image, Video,
   Check, BarChart3, Settings, Save,
-  AlertTriangle, Loader2, Search, ExternalLink, Coins, Crown
+  AlertTriangle, Loader2, Search, ExternalLink, Coins, Crown, Link as LinkIcon // Naye icons
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase, slugify, type Post, type Model, type Category, type Tag as TagType, type FooterAd, type UserProfile, type UserRole, type SubscriptionTier } from '@/lib/supabase'
@@ -157,11 +157,11 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
     <label className="flex items-center gap-3 cursor-pointer">
       <div
         onClick={() => onChange(!checked)}
-        className={cn('relative w-11 h-6 rounded-full transition-colors flex-shrink-0', checked ? '' : '')}
+        className={cn('relative w-11 h-6 rounded-full transition-colors flex-shrink-0')}
         style={{ background: checked ? 'linear-gradient(135deg, #ff5a3c, #ff784e)' : 'rgba(255,255,255,0.1)' }}
       >
         <div
-          className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform"
+          className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300"
           style={{ transform: checked ? 'translateX(20px)' : 'translateX(2px)' }}
         />
       </div>
@@ -187,13 +187,16 @@ type PostForm = {
   is_upcoming: boolean
   category_id: string
   tags: string
+  is_pro: boolean      // 🟢 NAYA FIELD
+  pro_link: string     // 🟢 NAYA FIELD
 }
 
 const emptyPost = (): PostForm => ({
   title: '', slug: '', description: '', cover_image: '', preview_video: '',
   file_size: '', image_count: '0', video_count: '0', open_link: '',
   is_trending: false, is_featured: false, is_upcoming: false,
-  category_id: '', tags: ''
+  category_id: '', tags: '',
+  is_pro: false, pro_link: '' // 🟢 NAYA FIELD
 })
 
 function PostsPanel({ categories }: { categories: Category[] }) {
@@ -237,7 +240,9 @@ function PostsPanel({ categories }: { categories: Category[] }) {
       is_featured: post.is_featured,
       is_upcoming: post.is_upcoming,
       category_id: post.category_id ?? '',
-      tags: (post.tags ?? []).join(', ')
+      tags: (post.tags ?? []).join(', '),
+      is_pro: (post as any).is_pro ?? false,      // 🟢 NAYA FIELD (any type casting to avoid TS error until DB schema updates)
+      pro_link: (post as any).pro_link ?? ''      // 🟢 NAYA FIELD
     })
     setModalOpen(true)
   }
@@ -259,7 +264,9 @@ function PostsPanel({ categories }: { categories: Category[] }) {
       is_featured: form.is_featured,
       is_upcoming: form.is_upcoming,
       category_id: form.category_id || null,
-      tags: form.tags.split(',').map(t => t.trim()).filter(Boolean)
+      tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
+      is_pro: form.is_pro,      // 🟢 NAYA FIELD
+      pro_link: form.pro_link || null // 🟢 NAYA FIELD
     }
     if (editPost) {
       await supabase.from('posts').update(payload).eq('id', editPost.id)
@@ -330,7 +337,11 @@ function PostsPanel({ categories }: { categories: Category[] }) {
                         <div className="w-10 h-12 rounded-lg flex-shrink-0" style={{ background: 'rgba(255,255,255,0.06)' }} />
                       )}
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-white truncate max-w-[180px]">{post.title}</p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-white truncate max-w-[150px]">{post.title}</p>
+                            {/* 🟢 Table list mein pro content ka tag */}
+                            {(post as any).is_pro && <Crown className="w-3.5 h-3.5 text-amber-500" />}
+                        </div>
                         <p className="text-xs text-white/35 truncate max-w-[180px]">{post.slug}</p>
                       </div>
                     </div>
@@ -407,10 +418,94 @@ function PostsPanel({ categories }: { categories: Category[] }) {
             <Field label="Preview Video URL" hint="Video plays on hover in cards">
               <TextInput value={form.preview_video} onChange={v => setForm(f => ({ ...f, preview_video: v }))} placeholder="https://..." />
             </Field>
-            <Field label="Open/Download Link">
-              <TextInput value={form.open_link} onChange={v => setForm(f => ({ ...f, open_link: v }))} placeholder="https://mega.nz/..." />
-            </Field>
-            <div className="grid grid-cols-3 gap-4">
+            
+            {/* 🟢 PRO CONTENT TOGGLE & LINK */}
+            <div className="mt-6 mb-2">
+              <div 
+                className="flex items-center justify-between p-4 rounded-xl cursor-pointer transition-colors" 
+                style={{ 
+                  background: form.is_pro ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)', 
+                  border: `1px solid ${form.is_pro ? 'rgba(245,158,11,0.3)' : 'rgba(255,255,255,0.05)'}` 
+                }}
+                onClick={() => setForm(f => ({ ...f, is_pro: !f.is_pro }))}
+              >
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors" 
+                    style={{ background: form.is_pro ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.05)' }}
+                  >
+                    <Crown className={`w-5 h-5 ${form.is_pro ? 'text-amber-500' : 'text-white/30'}`} />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${form.is_pro ? 'text-amber-500' : 'text-white/70'}`}>
+                      Pro Content (Premium)
+                    </p>
+                    <p className="text-xs text-white/40 mt-0.5">
+                      Enable to lock this content for Pro users only
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Toggle Switch */}
+                <div 
+                  className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${form.is_pro ? 'bg-amber-500' : 'bg-white/10'}`}
+                >
+                  <motion.div
+                    layout
+                    className="w-4 h-4 rounded-full bg-white absolute top-1"
+                    initial={false}
+                    animate={{ left: form.is_pro ? '28px' : '4px' }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                </div>
+              </div>
+
+              {/* 🔗 PRO DIRECT LINK INPUT */}
+              <AnimatePresence>
+                {form.is_pro && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                    animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-white/50 tracking-wider uppercase">
+                        Pro Direct Link / Secret Content
+                      </label>
+                      <div className="relative">
+                        <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500/50" />
+                        <input
+                          type="text"
+                          value={form.pro_link}
+                          onChange={(e) => setForm(f => ({ ...f, pro_link: e.target.value }))}
+                          placeholder="https://mega.nz/secret-link..."
+                          className="w-full bg-white/5 border text-white placeholder:text-white/20 rounded-xl py-2.5 pl-10 pr-4 focus:outline-none focus:border-amber-500/50 transition-colors"
+                          style={{ borderColor: 'rgba(245,158,11,0.2)' }}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* NORMAL OPEN LINK - Hidden if Pro is active */}
+            <AnimatePresence>
+              {!form.is_pro && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <Field label="Open/Download Link (Free Users)">
+                    <TextInput value={form.open_link} onChange={v => setForm(f => ({ ...f, open_link: v }))} placeholder="https://mega.nz/..." />
+                  </Field>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="grid grid-cols-3 gap-4 mt-4">
               <Field label="Images">
                 <TextInput value={form.image_count} onChange={v => setForm(f => ({ ...f, image_count: v }))} type="number" placeholder="0" />
               </Field>

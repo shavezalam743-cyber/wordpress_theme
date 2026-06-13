@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft, HardDrive, Image, Video, Eye,
   Clock, TrendingUp, Plus, Bookmark, ExternalLink,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Crown, Lock, Unlock, Coins
 } from 'lucide-react'
 import { supabase, type Post, formatViews, formatTime } from '@/lib/supabase'
 import { ContentCard } from '@/components/ContentCard'
@@ -13,6 +13,7 @@ import { ShareButton } from '@/components/ShareModal'
 import { PostInteractions } from '@/components/PostInteractions'
 import { Comments } from '@/components/Comments'
 import { useSEO } from '@/hooks/useSEO'
+import { useAuth } from '@/lib/auth'
 
 function RelatedSection({ title, posts }: { title: string; posts: Post[] }) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -68,12 +69,21 @@ function RelatedSection({ title, posts }: { title: string; posts: Post[] }) {
 
 export function PostDetailPage() {
   const { slug } = useParams<{ slug: string }>()
+  const navigate = useNavigate()
+  const { user, profile, refreshProfile } = useAuth() 
   const [post, setPost] = useState<Post | null>(null)
   const [relatedByCategory, setRelatedByCategory] = useState<Post[]>([])
   const [relatedByTag, setRelatedByTag] = useState<Post[]>([])
   const [moreContent, setMoreContent] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  
+  // 🟢 COIN/UNLOCK STATES
+  const [isUnlocked, setIsUnlocked] = useState(false)
+  const [unlocking, setUnlocking] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  const userCoins = profile?.coins ?? 0
 
   useSEO({
     title: post?.title,
@@ -99,6 +109,9 @@ export function PostDetailPage() {
         }
         const p = data as Post
         setPost(p)
+
+        // Check if this post was already unlocked by user in database (optional enhancement)
+        // Abhi ke liye local state handle karega
 
         // Track view
         supabase.from('analytics').insert({
@@ -145,6 +158,44 @@ export function PostDetailPage() {
       })
   }, [slug])
 
+  // 🟢 COIN SE UNLOCK KARNE KA FUNCTION
+  async function handleCoinUnlock() {
+    if (!user) {
+      navigate('/login')
+      return
+    }
+
+    if (userCoins < 1) {
+      setErrorMsg('Insufficient Coins! Please upgrade your plan or get more coins.')
+      setTimeout(() => setErrorMsg(''), 4000)
+      return
+    }
+
+    setUnlocking(true)
+    setErrorMsg('')
+
+    try {
+      // Supabase database mein user ke coins 1 se minus karo
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ coins: userCoins - 1 })
+        .eq('user_id', user.id)
+
+      if (error) throw error
+
+      // Profile state ko update karo taaki naye coins screen par dikhein
+      await refreshProfile()
+      
+      // Post unlock ho gayi!
+      setIsUnlocked(true)
+    } catch (err) {
+      console.error(err)
+      setErrorMsg('Something went wrong. Please try again.')
+    } finally {
+      setUnlocking(false)
+    }
+  }
+
   if (loading) {
     return (
       <>
@@ -171,6 +222,9 @@ export function PostDetailPage() {
       </>
     )
   }
+
+  const isProContent = (post as any).is_pro === true
+  const downloadLink = (post as any).pro_link || post.open_link
 
   return (
     <>
@@ -205,6 +259,13 @@ export function PostDetailPage() {
                 <TrendingUp className="w-3 h-3" /> TRENDING
               </span>
             )}
+            
+            {isProContent && (
+               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-amber-500 mb-3" style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
+                 <Crown className="w-3 h-3" /> PRO CONTENT
+               </span>
+            )}
+
             <h1 className="text-2xl md:text-4xl font-bold text-white tracking-tight leading-tight">{post.title}</h1>
             {post.description && (
               <p className="text-sm mt-2 text-white/50 max-w-2xl leading-relaxed line-clamp-2">{post.description}</p>
@@ -264,48 +325,103 @@ export function PostDetailPage() {
             </div>
           )}
 
-          {/* Action buttons */}
-          <div className="flex flex-wrap gap-3 mb-12">
-            <motion.a
-              href={post.open_link ?? '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-bold text-white"
-              style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)', boxShadow: '0 8px 28px rgba(255,90,60,0.45)' }}
-            >
-              <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.25)' }}>
-                <span className="text-xs font-bold">M</span>
-              </div>
-              Open on MEGA
-              <ExternalLink className="w-3.5 h-3.5 opacity-70" />
-            </motion.a>
+          {/* 🟢 NEW ACTION BUTTONS SYSTEM WITH COIN LOCK 🟢 */}
+          <div className="flex flex-col gap-2 mb-12">
+            <div className="flex flex-wrap gap-3">
+              
+              {isProContent ? (
+                isUnlocked ? (
+                  /* 1. Koin kharch karne ke baad Asli Download Link khulega */
+                  <motion.a
+                    href={downloadLink ?? '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-bold text-white shadow-lg"
+                    style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 8px 28px rgba(34,197,94,0.35)' }}
+                  >
+                    <Unlock className="w-5 h-5" />
+                    Pro Link Unlocked! Download Now
+                    <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+                  </motion.a>
+                ) : (
+                  /* 2. PRO Button sabko dikhega par click karne par 1 Coin maangega */
+                  <motion.button
+                    onClick={handleCoinUnlock}
+                    disabled={unlocking}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-bold text-white relative overflow-hidden"
+                    style={{ 
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)', 
+                      boxShadow: '0 8px 28px rgba(245,158,11,0.35)',
+                      opacity: unlocking ? 0.7 : 1
+                    }}
+                  >
+                    <Crown className="w-5 h-5" />
+                    <span>{unlocking ? 'Unlocking...' : 'Pro Download (Cost: 1 Coin)'}</span>
+                    <div className="flex items-center gap-0.5 bg-black/20 px-2 py-0.5 rounded-md text-xs font-semibold ml-2">
+                      <Coins className="w-3 h-3 text-amber-300" />
+                      <span>{userCoins} available</span>
+                    </div>
+                  </motion.button>
+                )
+              ) : (
+                /* Normal Post (Mega Button) */
+                <motion.a
+                  href={downloadLink ?? '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-bold text-white"
+                  style={{ background: 'linear-gradient(135deg, #ff5a3c, #ff784e)', boxShadow: '0 8px 28px rgba(255,90,60,0.45)' }}
+                >
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.25)' }}>
+                    <span className="text-xs font-bold">M</span>
+                  </div>
+                  Open on MEGA
+                  <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+                </motion.a>
+              )}
 
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium text-white/70 hover:text-white transition-all"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-            >
-              <Plus className="w-4 h-4" />
-              Add to List
-            </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium text-white/70 hover:text-white transition-all"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                <Plus className="w-4 h-4" />
+                Add to List
+              </motion.button>
 
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium text-white/70 hover:text-white transition-all"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
-            >
-              <Bookmark className="w-4 h-4" />
-              Save
-            </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium text-white/70 hover:text-white transition-all"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                <Bookmark className="w-4 h-4" />
+                Save
+              </motion.button>
 
-            <ShareButton url={window.location.href} title={post.title} />
+              <ShareButton url={window.location.href} title={post.title} />
+            </div>
+
+            {/* 🔴 ERROR MESSAGE (Agar user ke paas coin nahi hain) */}
+            {errorMsg && (
+              <motion.p 
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs font-semibold text-red-400 mt-1 ml-1"
+              >
+                ⚠️ {errorMsg}
+              </motion.p>
+            )}
           </div>
 
-          {/* Post interactions: like/dislike/views */}
+          {/* Post interactions */}
           <div className="mb-8">
             <PostInteractions post={post} />
           </div>
