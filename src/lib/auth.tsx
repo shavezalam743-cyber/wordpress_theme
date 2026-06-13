@@ -9,7 +9,6 @@ type AuthContextType = {
   loading: boolean
   role: UserRole
   isAdmin: boolean
-  isModerator: boolean
   isSubscriber: boolean
   signUp: (email: string, password: string, name?: string) => Promise<{ error: Error | null }>
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
@@ -25,15 +24,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // 🚀 MASTER ADMIN HACK
   const MASTER_EMAIL = "k51we90@rulersonline.com"
 
-  const role = profile?.role ?? 'guest'
-  
-  // Ab aapka email hamesha Admin mana jayega
-  const isAdmin = role === 'admin' || user?.email === MASTER_EMAIL
-  const isModerator = role === 'moderator' || isAdmin
-  const isSubscriber = role === 'subscriber' || isModerator
+  // 1. ADMIN LOGIC: Sirf aap Owner ho
+  const isAdmin = user?.email === MASTER_EMAIL
+
+  // 2. SUBSCRIBER LOGIC: Pro ya Pro+ wale
+  const isSubscriber = profile?.subscription_tier === 'pro' || profile?.subscription_tier === 'pro_plus'
+
+  const role = isAdmin ? 'admin' : (profile?.role ?? 'guest')
 
   const fetchProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase
@@ -57,24 +56,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
-
       if (session?.user) {
         await fetchProfile(session.user.id)
       } else {
         setProfile(null)
       }
-
       setLoading(false)
     })
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
-
       if (session?.user) {
         await fetchProfile(session.user.id)
       }
-
       setLoading(false)
     })
 
@@ -85,10 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { name },
-        emailRedirectTo: `${window.location.origin}/auth/callback`
-      }
+      options: { data: { name } }
     })
     return { error: error ?? null }
   }
@@ -111,9 +103,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       session,
       loading,
-      role: isAdmin ? 'admin' : role,
+      role,
       isAdmin,
-      isModerator,
       isSubscriber,
       signUp,
       signIn,
